@@ -1,82 +1,74 @@
-import React, { useState, useEffect } from "react";
-import { Avatar, IconButton } from "@material-ui/core";
-import { useParams } from "react-router-dom";
-import {
-  SearchOutlined,
-  AttachFile,
-  MoreVert,
-  InsertEmoticon,
-  Mic,
-} from "@material-ui/icons";
-import "./Chat.css";
-import db from "./firebase";
+import React, { useEffect, useState } from "react";
+import ScrollToBottom from "react-scroll-to-bottom";
 
-function Chat() {
-  const [seed, setSeed] = useState("");
-  const [input, setInput] = useState("");
-  const { roomId } = useParams();
-  const [roomName, setRoomName] = useState("");
+function Chat({ socket, username, room }) {
+  const [currentMessage, setCurrentMessage] = useState("");
+  const [messageList, setMessageList] = useState([]);
 
-  useEffect(() => {
-    if (roomId) {
-      db.collection("rooms")
-        .doc(roomId)
-        .onSnapshot((snapshot) => setRoomName(snapshot.data().name));
+  const sendMessage = async () => {
+    if (currentMessage !== "") {
+      const messageData = {
+        room: room,
+        author: username,
+        message: currentMessage,
+        time:
+          new Date(Date.now()).getHours() +
+          ":" +
+          new Date(Date.now()).getMinutes(),
+      };
+
+      await socket.emit("send_message", messageData);
+      setMessageList((list) => [...list, messageData]);
+      setCurrentMessage("");
     }
-  }, [roomId]);
-
-  useEffect(() => {
-    setSeed(Math.floor(Math.random() * 5000));
-  }, []);
-
-  const sendMessage = (e) => {
-    e.preventDefault();
-
-    setInput("");
   };
 
-  return (
-    <div className="chat">
-      <div className="chat_header">
-        <Avatar src={`https://avatars.dicebear.com/api/human/${seed}.svg`} />
-        <div className="chat_headerInfo">
-          <h3>{roomName}</h3>
-          <p>Last seen at ...</p>
-        </div>
+  useEffect(() => {
+    socket.on("receive_message", (data) => {
+      setMessageList((list) => [...list, data]);
+    });
+  }, [socket]);
 
-        <div className="chat_headerRight">
-          <IconButton>
-            <SearchOutlined />
-          </IconButton>
-          <IconButton>
-            <AttachFile />
-          </IconButton>
-          <IconButton>
-            <MoreVert />
-          </IconButton>
-        </div>
+  return (
+    <div className="chat-window">
+      <div className="chat-header">
+        <p>Live Chat</p>
       </div>
-      <div className="chat_body">
-        <p className={`chat_message ${true && "chat_reciever"}`}>
-          <span className="chat_name">Kunal Singh</span>
-          Hey Guys
-          <span className="chat_timestamp">3:52pm</span>
-        </p>
+      <div className="chat-body">
+        <ScrollToBottom className="message-container">
+          {messageList.map((messageContent) => {
+            return (
+              <div
+                className="message"
+                id={username === messageContent.author ? "you" : "other"}
+              >
+                <div>
+                  <div className="message-content">
+                    <p>{messageContent.message}</p>
+                  </div>
+                  <div className="message-meta">
+                    <p id="time">{messageContent.time}</p>
+                    <p id="author">{messageContent.author}</p>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </ScrollToBottom>
       </div>
-      <div className="chat_footer">
-        <InsertEmoticon />
-        <form>
-          <input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="Type a message"
-            type="text"
-          />
-          <button onClick={sendMessage} type="submit">
-            Send a message
-          </button>
-        </form>
-        <Mic />
+      <div className="chat-footer">
+        <input
+          type="text"
+          value={currentMessage}
+          placeholder="Hey..."
+          onChange={(event) => {
+            setCurrentMessage(event.target.value);
+          }}
+          onKeyPress={(event) => {
+            event.key === "Enter" && sendMessage();
+          }}
+        />
+        <button onClick={sendMessage}>&#9658;</button>
       </div>
     </div>
   );
